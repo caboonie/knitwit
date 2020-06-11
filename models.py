@@ -15,3 +15,4 @@ class Pattern(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer)
     pattern_json = Column(String)
+    name = Column(String)

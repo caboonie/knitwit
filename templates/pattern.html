@@ -1,0 +1,865 @@
+<!-- have non-pencil tool-->
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-98841-11']);
+            _gaq.push(['_trackPageview']);
+            (function() {
+              var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+              ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+              var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+            })();
+          </script>
+        <style type="text/css">
+
+            html,body { height: 100%; margin: 0px; padding: 0px;  }
+            #full { background: #0f0; height: 100% }
+
+            .stitch { width:15px; height:15px; border: 1px darkgray solid; float:left; box-sizing: border-box; 
+                display: none;
+            }
+
+            .color_box { width:30px; height:30px; border: 2px darkgray solid; float:left; box-sizing: border-box; 
+                display: none; margin: 5px;
+                position: relative;
+            }
+
+            .color_box_change { margin-bottom:30px; width:30px; height:20px; border: 2px darkgray solid; box-sizing: border-box; 
+            }
+
+            .selected_box {border: 3px grey solid;}
+
+            .arrow {
+                border: solid black;
+                border-width: 0 3px 3px 0;
+                display: inline-block;
+                padding: 3px;
+            }
+
+            .stitch_shape{
+                clip-path: polygon(0% 0%, 0% 50%, 50% 100%, 100% 50%, 100% 0%, 50% 50%);
+                overflow: visible;
+                height: 200% !important;
+            }
+
+            .stitch_color{
+                width: 100%;
+                height: 100%;
+            }
+
+            .select_stitch_box {
+                float: left;
+                display: none;
+            }
+
+            .select_stitch_color{
+                background-color: black;
+                opacity: .5;
+            }
+
+            .selecting {
+                display: block;
+                
+            }
+
+            .classy_button{
+                padding: 5px; display: inline; border: 2px gray solid; box-sizing: border-box;
+            }
+
+            .clicked {
+                color: white;
+                background-color: gray;
+            }
+
+            /* The Modal (background) */
+            .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            padding-top: 100px; /* Location of the box */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            }
+
+            /* Modal Content */
+            .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            }
+
+            .popuptext {
+            visibility: hidden;
+            width: 60px;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px 0;
+            position: absolute;
+            z-index: 1;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -30px;
+            }
+
+            .popupbutton {
+                background-color: #555;
+                color: #fff;
+                border-radius: 6px;
+                width: 50%;
+                height: 100%;
+                padding: 3px;
+                box-sizing: border-box;
+            }
+
+            .popupbutton:hover {
+                background-color: black;
+            }
+
+            /* Toggle this class - hide and show the popup */
+            .show {
+            visibility: visible;
+            -webkit-animation: fadeIn 1s;
+            animation: fadeIn 1s;
+            }
+
+            /* Add animation (fade in the popup) */
+            @-webkit-keyframes fadeIn {
+            from {opacity: 0;} 
+            to {opacity: 1;}
+            }
+
+            @keyframes fadeIn {
+            from {opacity: 0;}
+            to {opacity:1 ;}
+            }
+    
+        </style>
+    </head>
+    <body draggable="false">
+        <!-- presets for cloning -->
+        <div style="display: none;">
+            <div id="stitch_box" class="stitch">
+                <div class="stitch_color"></div>
+            </div>
+    
+            <div id="select_stitch_box" class="select_stitch_box">
+                <div class="stitch_color select_stitch_color"></div>
+            </div>
+    
+    
+            <div id="color_box" class="color_box" onclick="clickColorBox(this)" onmouseover="colorChangePopup(this)" onmouseout="colorChangePopup(this)">
+                <span class="popuptext" id="myPopup" onclick="clickEditColor(this)">
+                    <span class="popupbutton">E</span>
+                    <span class="popupbutton">X</span>
+                </span>
+            </div>
+        </div>
+           
+            
+
+        <div id="control_panel" style="width: 100%; height: 20%; padding: 5px;">
+            <div class="classy_button" onclick="$('.stitch_color').toggleClass('stitch_shape')">
+                Stitcherize!
+            </div>
+            Stitch Ratio
+            <input type="range" min="1" max="100" value="50" id="stitch_ratio"  onmousedown="sliderDown()" onmousemove="setStitchRatio()" onmouseup="sliderUp()">
+            <div id="select_button" class="classy_button" onclick="startSelect()">
+                Select!
+            </div>
+
+            <div id="copy_button" class="classy_button" onclick="clickCopy()">
+                Copy!
+            </div>
+
+            <div id="paste_button" class="classy_button" onclick="clickPaste()">
+                Paste!
+            </div>
+
+            <div id="pencil_button" class="classy_button clicked" onclick="clickPencil()">
+                Pencil!
+            </div>
+
+            <div id="bucket_button" class="classy_button" onclick="clickBucket()">
+                Bucket!
+            </div>
+
+            <div id="square_button" class="classy_button" onclick="clickSquare()">
+                Square!
+            </div>
+
+            <div id="save_button" class="classy_button" onclick="clickSave()">
+                Save!
+            </div>
+
+            <span>Stitches Wide</span><input type="number" id="stitches_wide" >
+            <span>Stitches Tall</span><input type="number" id="stitches_high" >
+            <p></p>
+            <a href = "/logout"> Logout </a>
+        </div>
+
+        <div id = "workspace" style="width: 100%; height: 80%">
+            
+    
+            <div id="tool_box" style="width:20%; height:100%; border: 1px gray solid; float:left; box-sizing: border-box; padding:10px">
+                <!-- Color Modal -->
+                <div id="myModal" class="modal">
+                    <!-- Modal content -->
+                    <div class="modal-content">
+                        <p>Choose a color:</p>
+                        <input type="color" id="choose_color" value="#ff0000">
+                        <div class="classy_button" onclick="addColor($('#choose_color').val())">
+                            Select
+                        </div>
+                    </div>
+                </div>
+
+                <div class="classy_button" onclick="$('#myModal').css('display','block')">
+                    Add Color
+                </div>
+                <div id="dropper_button" class="classy_button" onclick = "clickDropper()">Dropper</div>
+                <div id="color_palette" style="padding: 10px; margin-top: 20px;">
+
+                </div>
+
+            </div>
+            <div id="pattern_box" style="width:80%; height:100%; background-color: gray; border: 1px gray solid; margin-left:20%; overflow: scroll; box-sizing: border-box">
+                <div style="position: relative;">
+                    <div id="pattern_sub_box" style="width: 600px; height:400px; position: absolute;"> </div>
+                    <div id="pattern_sub_box_select" style="width: 600px; height:400px; position: absolute; display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        
+        
+        
+        
+    </body>
+    <script>
+        const PENCIL = 0
+        const DROPPER = 1
+        const BUCKET = 2
+        const SQUARE = 3
+        const SELECT = 4
+        const ARROW = 5
+        var stitches_wide = 5;
+        var stitches_high = 3;
+        var stitch_box_width = 30;
+        var stitch_box_height = 20;
+        var selected_box = 0;
+        var selected_color_box = 0;
+        var action = PENCIL;
+        var colors_added = new Set()
+        var color_modal = $("#myModal");
+        var snapshots = []
+        var snapIndex = 0 
+        
+
+        class Stitch {
+            constructor(color,x,y) {
+                this.color = color;
+                this.x = x;
+                this.y = y;
+            }
+        }
+
+        class Pattern {
+            constructor(grid) {
+                // grid: 2D nested array of stitches
+                this.grid = grid;
+                this.height = grid.length;
+                this.width = grid[0].length;
+            }
+
+            get (x,y) {
+                return this.grid[y][x];
+            }
+        }
+
+       
+
+        function copyToPattern(corner1,corner2) {
+            console.log("copy corners",corner1,corner2)
+            const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1,corner2);
+            grid = []
+            id = "stitch_box"
+            console.log(topy,bottomy)
+            for (y = topy; y < bottomy; y++){
+                row = []
+                for (x = leftx; x < rightx; x++) {
+                    var box = $("#"+id+"_"+x+"_"+y);
+                    var color = box.children(":first").css("background-color")
+                    stitch = new Stitch(color,x,y)
+                    row.push(stitch)
+                }
+                grid.push(row)
+            }
+            console.log("grid",grid)
+            return new Pattern(grid)
+        }
+
+        function pastePattern(corner,pattern) {
+            if (corner == 0) {
+                return;
+            }
+            leftx = corner.data("x");
+            topy = corner.data("y");
+            bottomy = Math.min(stitches_high,topy+pattern.height)
+            rightx = Math.min(stitches_wide,leftx+pattern.width)
+            var py = 0;
+            
+            console.log(leftx,rightx,topy,bottomy)
+            for (y = topy; y < bottomy; y++){
+                var px = 0;
+                for (x = leftx; x < rightx; x++) {
+                    var box = $("#stitch_box_"+x+"_"+y);
+                    // console.log(pattern,px,py,pattern.get(px,py))
+                    box.children(":first").css("background-color", pattern.get(px,py).color)
+                    px+=1
+                }
+                py+=1
+            }
+        }
+        
+        
+
+        $("#stitches_wide").keyup(function() {
+            changeDims()
+        });
+
+        $("#stitches_wide").click(function() {
+            changeDims()
+        });
+
+        $("#stitches_high").keyup(function() {
+            changeDims()
+        });
+
+        $("#stitches_high").click(function() {
+            changeDims()
+        });
+
+        function changeDims() {
+            console.log("changing stitches wide", "#stitch_box"+(stitches_wide-1)+"_"+(stitches_high-1))
+            pattern = copyToPattern($("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)))
+            fillBoxes();
+            pastePattern($("#stitch_box_0_0"), pattern)
+        }
+        
+
+        function fillBoxes(color="#e8e8e8") {
+            stitches_wide = $("#stitches_wide").val();
+            stitches_high = $("#stitches_high").val();
+
+            for (sub_box of [$("#pattern_sub_box"), $("#pattern_sub_box_select")]) {
+                sub_box.css("width",stitches_wide*stitch_box_width);
+                sub_box.css("height",stitches_high*stitch_box_height);
+            }
+
+            var x, y;
+            console.log("called fill boxes");
+            jQuery("#pattern_sub_box").empty();
+            jQuery("#pattern_sub_box_select").empty();
+            for (y = 0; y < stitches_high; y++){
+                for (x = 0; x < stitches_wide; x++) {
+                    var box = jQuery("#stitch_box").clone();
+                    box.css("display","block");
+                    box.data("x",x);
+                    box.data("y",y);
+                    box.attr("id","stitch_box_"+x+"_"+y)
+                    box.children(":first").css("background-color", color)
+                    jQuery("#pattern_sub_box").append(box);
+
+                    var box = jQuery("#select_stitch_box").clone();
+                    box.data("x",x);
+                    box.data("y",y);
+                    box.attr("id","select_stitch_box_"+x+"_"+y)
+                    jQuery("#pattern_sub_box_select").append(box);
+                }
+            }
+        }
+        
+        
+        
+        function loadFromSnap(snapshot) {
+            console.log("loading from snap")
+            saved_pattern = new Pattern(snapshot.grid)
+            stitches_wide = snapshot.width;
+            stitches_high = snapshot.height;
+            stitch_box_width = snapshot.stitch_box_width
+            stitch_box_height = snapshot.stitch_box_height
+            colors_added = new Set()
+
+            // load the saved color boxes
+            jQuery("#color_palette").empty()
+            if (snapshot.colors != null){
+                for (color of snapshot.colors) {
+                    console.log("calling with",color)
+                    addColor(color)
+                }
+            }
+
+            // set the stitch dimensions
+            $("#stitches_wide").val(stitches_wide);
+            $("#stitches_high").val(stitches_high);
+
+            for (stitch_box of [$("#stitch_box"), $("#select_stitch_box")]) {
+                stitch_box.css("width",stitch_box_width);
+                stitch_box.css("height",stitch_box_height);
+            }
+
+            for (sub_box of [$("#pattern_sub_box"), $("#pattern_sub_box_select")]) {
+                sub_box.css("width",stitches_wide*stitch_box_width);
+                sub_box.css("height",stitches_high*stitch_box_height);
+            }
+
+            // first steps, fill boxes with blanks, then copy in pattern if has been saved
+            fillBoxes()
+
+            pastePattern($("#stitch_box_0_0"),saved_pattern)
+
+            snapAndSave(save=true, snap=false) // don't snap on undo
+        }
+
+        loadFromSnap(JSON.parse({{pattern|tojson}}))
+        snapAndSave(save=false) // snap the initial state, no need to save though
+        
+
+        function applyToBoxesRect(func, leftx=0,topy=0,rightx=stitches_wide,bottomy=stitches_high, id="stitch_box"){
+            
+            console.log("apply called with func",func,leftx,topy,rightx,bottomy,id)
+            // will call the func on all boxes within the rectangular range
+            for (x = leftx; x < rightx; x++) {
+                for (y = topy; y < bottomy; y++){
+                    var box = $("#"+id+"_"+x+"_"+y);
+                    func(box);
+                }
+            }
+        }
+
+        function setBoxColor(box) {
+            if (selected_color_box != 0) {
+                $(box).children(":first").css("background-color", selected_color_box.css("background-color"))
+            }
+        }        
+
+ 
+
+        var stitchRatioSlider = false;
+
+        function sliderDown() {
+            stitchRatioSlider = true;
+        }
+
+        function sliderUp() {
+            stitchRatioSlider = false;
+        }
+
+        function setStitchRatio() {
+            if (stitchRatioSlider) {
+                stitch_box_width = $("#stitch_ratio").val();
+                $(".stitch").css("width",stitch_box_width)
+                $("#pattern_sub_box").css("width",stitches_wide*stitch_box_width);
+                $("#pattern_sub_box").css("height",stitches_high*stitch_box_height);
+            }
+        }
+
+        // Color modal scripts
+        
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if ($(event.target).is(color_modal)) {
+                color_modal.css("display", "none");
+            }
+        }
+
+        window.onmouseup = function(event) {
+            console.log("mouseup window")
+            isDragging = false;
+        }
+
+        // undo function
+        window.onkeydown = function(event) {
+            if (event.ctrlKey) {
+                if (event.keyCode == 90) {
+                    console.log("Trying undo",snapIndex)
+                    if (snapIndex > 0) {
+                        snapIndex -= 1
+                        loadFromSnap(snapshots[snapIndex])
+                    }
+                } else if (event.keyCode == 89) {
+                    if (snapIndex < (snapshots.length-1)) {
+                        snapIndex += 1
+                        loadFromSnap(snapshots[snapIndex])
+                    }
+                }
+                
+            }
+        }
+
+        // re function
+
+        function addColor(color) {
+            if (!colors_added.has(color)){
+                color_modal.css("display", "none");
+                var box = jQuery("#color_box").clone();
+                box.css("display","block");
+                box.css("background-color", color)
+                jQuery("#color_palette").append(box);
+                clickColorBox(box)
+                colors_added.add(color)
+                console.log(colors_added)
+            } else {
+                alert("color already added")
+            }
+            
+        }
+
+        // When the user clicks on div, open the popup
+        function colorChangePopup(box) {
+            $(box).children(":first").toggleClass("show");
+        }
+
+        function clearButtons() {
+            if (isSelecting) {
+                // turn Select off
+                startSelect();
+            }
+            $(".classy_button").removeClass("clicked")
+        }
+
+        function clickColorBox(box) {
+            if (action == DROPPER || action == SELECT || action == ARROW) {
+                clearButtons()
+                action = PENCIL
+                $("#pencil_button").addClass("clicked")
+            }
+
+            
+            if( selected_color_box != 0) {
+                selected_color_box.toggleClass("selected_box")
+            }
+
+            if ($(box).is(selected_color_box)) {
+                selected_color_box = 0;
+            } else {
+                selected_color_box = $(box)
+                $(box).toggleClass("selected_box")
+            }
+            console.log("clicked color box, selected",selected_color_box)
+        }
+
+        function clickDropper() {
+            clearButtons()
+            
+            if (action == DROPPER) {
+                
+                action = PENCIL;
+            } else {
+                $("#dropper_button").addClass("clicked")
+                action = DROPPER;
+                if( selected_color_box != 0) {
+                    selected_color_box.toggleClass("selected_box")
+                }
+                selected_color_box = 0;
+
+            }
+        }
+
+        function clickBucket(){
+            clearButtons()
+            if (action == BUCKET) {
+                action = PENCIL;
+            } else {
+                $("#bucket_button").addClass("clicked")
+                action = BUCKET;
+            }
+        }
+
+        function clickPencil(){
+            clearButtons()
+            console.log("clicked pencil",action)
+            if (action == PENCIL) {
+                if( selected_color_box != 0) {
+                    selected_color_box.toggleClass("selected_box")
+                }
+                selected_color_box = 0;
+                action = ARROW
+            } else {
+                action = PENCIL;
+                $("#pencil_button").addClass("clicked")
+            }
+            
+        }
+
+        function clickSquare(){
+            $(".classy_button").removeClass("clicked")
+            if (action == SQUARE) {
+                action = PENCIL;
+            } else {
+                $("#square_button").addClass("clicked")
+                action = SQUARE;
+            }
+        }
+
+        // Dragging functionality
+        var isDragging = false;
+        var isSelecting = false;
+        var corner1 = 0;
+        var corner2 = 0;
+        var oldcorner2 = 0;
+        var selectDarkenAmt = -50;
+        var clipboard = 0;
+
+        function selectOff(box) {
+            box.children(":first").css("opacity",".5");
+        }
+
+        function selectOn(box) {
+            box.children(":first").css("opacity","0");
+        }
+        // $("#pattern_sub_box_select")
+
+        $("#pattern_sub_box")
+            .on("mouseover",".stitch", function(event) {
+                event.preventDefault();
+                if (isDragging) {
+                    setBoxColor(this);
+                }
+            })
+
+            .on("mousedown",".stitch", function(event) {
+                isDragging = true;
+                // unselect previous
+                if( selected_box != 0) {
+                    selected_box.toggleClass("selected_box")
+                }
+
+                if ($(this).is(selected_box)) {
+                    selected_box = 0;
+                } else {
+                    selected_box = $(this)
+                    $(this).toggleClass("selected_box")
+                }
+
+                if (action == PENCIL){
+                    setBoxColor(this); 
+                } else if (action == DROPPER) {
+                    addColor($(this).children(":first").css("background-color"))
+                    action = PENCIL;
+                } else if (action == BUCKET) {
+                    console.log("calling paint Bucket")
+                    paintBucket($(this))
+                } else if (action == SQUARE) {
+
+                }
+                snapAndSave()
+            })
+
+            .on("mouseup",".select_stitch_box", function() {
+                isDragging = false;
+                snapAndSave()
+            })
+        
+
+
+        // $(document).ready(function(){
+        $("#pattern_sub_box_select")
+            .on("mouseover",".select_stitch_box", function(event) {
+                event.preventDefault();
+                if (isDragging) {
+                    corner2 = $(this)
+                    if (!corner2.is(oldcorner2)) {
+                        if (oldcorner2 != 0) {
+                            drawSelection(selectOff,corner1,oldcorner2)
+                        }
+                        drawSelection(selectOn,corner1,corner2)
+                        oldcorner2 = corner2;
+                    }
+                }
+            })
+
+            .on("mousedown",".select_stitch_box", function(event) {
+                event.preventDefault();
+                console.log("mousedown",isSelecting)
+                isDragging = true;
+                drawSelection(selectOff);
+                corner1 = $(this)
+                corner2 = $(this)
+                drawSelection(selectOn,corner1,corner2)
+                oldcorner2 = corner2;
+                   
+            })
+
+            .on("mouseup",".select_stitch_box", function() {
+                isDragging = false;
+            })
+
+        function cornerToBounds(_corner1,_corner2) {
+            leftx = Math.min(_corner1.data("x"),_corner2.data("x"))
+            rightx = Math.max(_corner1.data("x"),_corner2.data("x"))+1
+            topy = Math.min(_corner1.data("y"),_corner2.data("y"))
+            bottomy = Math.max(_corner1.data("y"),_corner2.data("y"))+1
+            return [leftx,topy,rightx,bottomy]
+        }
+
+        function drawSelection(func,_corner1=null,_corner2=null) {
+            // draw a selection box between the two corners
+            if (_corner1 == null) {
+                console.log("CLEARING SELECTION")
+                applyToBoxesRect(func, 0, 0, stitches_wide, stitches_high, "select_stitch_box")
+            } else {         
+                console.log("Corners",_corner1,_corner2)   
+                const [leftx,topy,rightx,bottomy] = cornerToBounds(_corner1,_corner2)
+                applyToBoxesRect(func, leftx,topy,rightx,bottomy,"select_stitch_box")
+            }
+        }
+
+
+        function startSelect() {
+            if( selected_color_box != 0) {
+                selected_color_box.toggleClass("selected_box")
+            }
+            selected_color_box = 0;
+            $(".classy_button").removeClass("clicked")
+
+            
+            
+            if (isSelecting) {
+                isSelecting = false;
+                action = ARROW
+                $(".select_stitch_box").removeClass("selecting")
+                $("#pattern_sub_box_select").css("display","none")
+                drawSelection(selectOff);
+            } else {
+                action = SELECT
+                isSelecting = true;
+                $("#select_button").addClass("clicked")
+                $(".select_stitch_box").addClass("selecting")
+                $("#pattern_sub_box_select").css("display","block")               
+
+            }
+            oldcorner2 = 0;
+            corner2=0;
+            corner1=0;
+        }
+
+ 
+        function clickCopy() {
+            
+            
+            $("#copy_button").removeClass("clicked")
+            if (isSelecting) {
+                clipboard = copyToPattern(corner1,corner2);
+                // turn Select off
+                startSelect();
+            }
+            
+            $("#copy_button").removeClass("clicked")
+        }
+
+        function clickPaste() {
+            pastePattern(selected_box, clipboard);
+            snapAndSave()
+        }
+
+
+
+        function paintBucket(start_box) {
+            // recursive BFS 
+            let visited = new Set();
+
+            color = start_box.children(":first").css("background-color")
+
+            function paintBucketRecurse(box_id) {
+                // console.log("recursed on ",box_id)
+                if (visited.has(box_id)) {
+                    return
+                }
+
+                visited.add(box_id);
+                box = $(box_id);
+                // console.log("processing ",box_id,box,box.children(":first").css("background-color"),color)
+
+                if (box.children(":first").css("background-color") == color) {
+                    setBoxColor(box);
+                    // recurse on neighbors
+                    var x = box.data("x");
+                    var y = box.data("y");
+                    for ([dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                        if (0<=(x+dx) && (x+dx)<stitches_wide){
+                            if (0<=(y+dy) && (y+dy)<stitches_high){
+                                paintBucketRecurse("#stitch_box_"+(x+dx)+"_"+(y+dy))
+                            }
+                            
+                        }
+                    }
+                }
+            }
+            paintBucketRecurse("#"+start_box.attr("id"))
+        }
+
+        // TODO: I want to be able to save  (flask backend - save pattern as JSON), and to be able to make pattern from image (is javascript reasonable? probs not, can do python async with ajax)
+        // Color change - change every pixel that is of that specific color
+        // purl display in stitchify - might be easier to generate in python, but editing the stitches is easier if javascript
+        // ideally stitchify cables as well
+        // notes, and numbers along the side
+        // insert column/row
+        // draw square of color
+        // ctrl-z functionality - store array of snapshots - push one on after each change
+
+
+        function snapAndSave(save=true, snap=true) {
+            console.log("saving corners",$("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)))
+            pattern = copyToPattern($("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)));
+            pattern.id = {{pattern_id}}
+            pattern.colors = Array.from(colors_added);  // save the added colors
+            pattern.stitch_box_width = stitch_box_width
+            pattern.stitch_box_height = stitch_box_height
+            console.log("pattern to save",pattern)
+            if (snap) {
+                snapshots.push(pattern)
+                snapIndex = snapshots.length-1
+            }
+
+            if (save) {
+                $.ajax({
+                    url: "/save",
+                    contentType: 'application/json',
+                    type: 'POST',
+                    dataType: 'json',
+                    data: JSON.stringify(pattern),   // converts js value to JSON string
+                    })
+                    .done(function(result){     // on success get the return object from server
+                        console.log(result)     // do whatever with it. In this case see it in console
+                })
+            }
+        }
+
+
+        function clickSave() {
+            snapAndSave()
+        }
+
+        
+
+
+        
+
+
+    </script>
+
+
+</body>
+</html>
