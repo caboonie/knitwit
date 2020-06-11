@@ -40,7 +40,7 @@
                 padding: 3px;
             }
 
-            .stitch_shape{
+            .stitchify .stitch_shape_knit{
                 clip-path: polygon(0% 0%, 0% 50%, 50% 100%, 100% 50%, 100% 0%, 50% 50%);
                 overflow: visible;
                 height: 200% !important;
@@ -68,6 +68,8 @@
 
             .classy_button{
                 padding: 5px; display: inline; border: 2px gray solid; box-sizing: border-box;
+                cursor: pointer;
+                margin: 5px;
             }
 
             .clicked {
@@ -120,6 +122,7 @@
                 height: 100%;
                 padding: 3px;
                 box-sizing: border-box;
+                cursor: pointer;
             }
 
             .popupbutton:hover {
@@ -150,7 +153,7 @@
         <!-- presets for cloning -->
         <div style="display: none;">
             <div id="stitch_box" class="stitch">
-                <div class="stitch_color"></div>
+                <div class="stitch_color stitch_shape_knit"></div>
             </div>
     
             <div id="select_stitch_box" class="select_stitch_box">
@@ -159,9 +162,9 @@
     
     
             <div id="color_box" class="color_box" onclick="clickColorBox(this)" onmouseover="colorChangePopup(this)" onmouseout="colorChangePopup(this)">
-                <span class="popuptext" id="myPopup" onclick="clickEditColor(this)">
-                    <span class="popupbutton">E</span>
-                    <span class="popupbutton">X</span>
+                <span class="popuptext" id="myPopup">
+                    <span class="popupbutton" onclick="clickEditColor(this)">E</span>
+                    <span class="popupbutton" onclick="removeColor(this)">X</span>
                 </span>
             </div>
         </div>
@@ -169,8 +172,8 @@
             
 
         <div id="control_panel" style="width: 100%; height: 20%; padding: 5px;">
-            <div class="classy_button" onclick="$('.stitch_color').toggleClass('stitch_shape')">
-                Stitcherize!
+            <div class="classy_button" onclick="$('.stitch').toggleClass('stitchify')">
+                Stitchify!
             </div>
             Stitch Ratio
             <input type="range" min="1" max="100" value="50" id="stitch_ratio"  onmousedown="sliderDown()" onmousemove="setStitchRatio()" onmouseup="sliderUp()">
@@ -223,7 +226,10 @@
                         </div>
                     </div>
                 </div>
-
+                <div id="stitch_palette" style="height: 60px;">
+                    <div class="classy_button stitch_type" data-stitch_type="purl">Purl</div>
+                    <div class="classy_button stitch_type" data-stitch_type="stitch">Stitch</div>
+                </div>
                 <div class="classy_button" onclick="$('#myModal').css('display','block')">
                     Add Color
                 </div>
@@ -231,6 +237,7 @@
                 <div id="color_palette" style="padding: 10px; margin-top: 20px;">
 
                 </div>
+                
 
             </div>
             <div id="pattern_box" style="width:80%; height:100%; background-color: gray; border: 1px gray solid; margin-left:20%; overflow: scroll; box-sizing: border-box">
@@ -259,6 +266,7 @@
         var stitch_box_height = 20;
         var selected_box = 0;
         var selected_color_box = 0;
+        var selected_stitch_box = 0;
         var action = PENCIL;
         var colors_added = new Set()
         var color_modal = $("#myModal");
@@ -279,7 +287,11 @@
                 // grid: 2D nested array of stitches
                 this.grid = grid;
                 this.height = grid.length;
-                this.width = grid[0].length;
+                if (this.height == 0) {
+                    this.width = 0
+                } else {
+                    this.width = grid[0].length;
+                }
             }
 
             get (x,y) {
@@ -290,11 +302,11 @@
        
 
         function copyToPattern(corner1,corner2) {
-            console.log("copy corners",corner1,corner2)
+            // console.log("copy corners",corner1,corner2)
             const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1,corner2);
             grid = []
             id = "stitch_box"
-            console.log(topy,bottomy)
+            // console.log(topy,bottomy)
             for (y = topy; y < bottomy; y++){
                 row = []
                 for (x = leftx; x < rightx; x++) {
@@ -305,7 +317,6 @@
                 }
                 grid.push(row)
             }
-            console.log("grid",grid)
             return new Pattern(grid)
         }
 
@@ -319,7 +330,7 @@
             rightx = Math.min(stitches_wide,leftx+pattern.width)
             var py = 0;
             
-            console.log(leftx,rightx,topy,bottomy)
+            // console.log(leftx,rightx,topy,bottomy)
             for (y = topy; y < bottomy; y++){
                 var px = 0;
                 for (x = leftx; x < rightx; x++) {
@@ -450,9 +461,24 @@
 
         function setBoxColor(box) {
             if (selected_color_box != 0) {
+                $(box).data("old_color", $(box).children(":first").css("background-color"))
                 $(box).children(":first").css("background-color", selected_color_box.css("background-color"))
+            } else if (selected_stitch_box != 0) {
+
+                $(box).data("old_stitch", $(box).data("stitch_type"))
+                $(box).data("stitch_type",selected_stitch_box.data("stitch_type"))
+                if (selected_stitch_box.data("stitch_type") == "purl") {
+                    $(box).children(":first").removeClass("stitch_shape_knit")
+                } else {
+                    $(box).children(":first").addClass("stitch_shape_knit")
+                }
+                
             }
-        }        
+        }  
+
+        function resetBoxColor(box) {
+            $(box).children(":first").css("background-color", $(box).data("old_color"))
+        }      
 
  
 
@@ -491,6 +517,7 @@
 
         // undo function
         window.onkeydown = function(event) {
+            console.log(event.keyCode)
             if (event.ctrlKey) {
                 if (event.keyCode == 90) {
                     console.log("Trying undo",snapIndex)
@@ -503,6 +530,9 @@
                         snapIndex += 1
                         loadFromSnap(snapshots[snapIndex])
                     }
+                } else if (event.keyCode == 83) {
+                    snapAndSave(save=true,snap=false)
+                    alert("saved")
                 }
                 
             }
@@ -516,13 +546,23 @@
                 var box = jQuery("#color_box").clone();
                 box.css("display","block");
                 box.css("background-color", color)
+                color = box.css("background-color")
                 jQuery("#color_palette").append(box);
                 clickColorBox(box)
                 colors_added.add(color)
                 console.log(colors_added)
             } else {
                 alert("color already added")
-            }
+            }   
+        }
+
+        function removeColor(colorButton) {
+            colorbox = $(colorButton).parent().parent()
+            console.log("colors_added before",colors_added)
+            colors_added.delete(colorbox.css("background-color"))
+            console.log("colors_added",colors_added)
+            colorbox.remove();
+            snapAndSave();
             
         }
 
@@ -546,6 +586,10 @@
                 $("#pencil_button").addClass("clicked")
             }
 
+            if( selected_stitch_box != 0) {
+                selected_stitch_box.toggleClass("clicked")
+            }
+            selected_stitch_box = 0;
             
             if( selected_color_box != 0) {
                 selected_color_box.toggleClass("selected_box")
@@ -635,7 +679,21 @@
             .on("mouseover",".stitch", function(event) {
                 event.preventDefault();
                 if (isDragging) {
-                    setBoxColor(this);
+                    if (action == PENCIL) {
+                        setBoxColor(this);
+                    } else if (action == SQUARE) {
+                        corner2 = $(this)
+                        if (!corner2.is(oldcorner2)) {
+                            if (oldcorner2 != 0) {
+                                const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1,oldcorner2)
+                                applyToBoxesRect(resetBoxColor, leftx,topy,rightx,bottomy,"stitch_box")
+                            }
+                            const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1,corner2)
+                            applyToBoxesRect(setBoxColor, leftx,topy,rightx,bottomy,"stitch_box")
+                            oldcorner2 = corner2;
+                        }
+                    }
+                    
                 }
             })
 
@@ -662,7 +720,11 @@
                     console.log("calling paint Bucket")
                     paintBucket($(this))
                 } else if (action == SQUARE) {
-
+                    corner1 = $(this)
+                    corner2 = $(this)
+                    const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1,corner2)
+                    applyToBoxesRect(setBoxColor, leftx,topy,rightx,bottomy,"stitch_box")
+                    oldcorner2 = corner2;
                 }
                 snapAndSave()
             })
@@ -810,24 +872,59 @@
             paintBucketRecurse("#"+start_box.attr("id"))
         }
 
-        // TODO: I want to be able to save  (flask backend - save pattern as JSON), and to be able to make pattern from image (is javascript reasonable? probs not, can do python async with ajax)
+        $(".stitch_type").mousedown(function() {
+            console.log("clicked stitch type",this)
+            // unselect color box
+            if( selected_color_box != 0) {
+                selected_color_box.toggleClass("selected_box")
+            }
+            selected_color_box = 0;
+
+            if (action == DROPPER || action == SELECT || action == ARROW) {
+                clearButtons()
+                action = PENCIL
+                $("#pencil_button").addClass("clicked")
+            }
+
+            
+            if( selected_stitch_box != 0) {
+                selected_stitch_box.removeClass("clicked")
+            }
+
+            if ($(this).is(selected_stitch_box)) {
+                selected_stitch_box = 0;
+            } else {
+                selected_stitch_box = $(this)
+                $(this).addClass("clicked")
+            }
+        })
+
+        function stitchify() {
+            // I want to make it so that the stitch look will apply or not by toggling a class - right now that works for knit stitch
+            // maybe toggle the class controlling the stitch look
+            // but how will I control whether or not that class is active
+            // add stitch class as data attribute and then on stitchify we toggle that class?
+
+            // could have a parent who is given some class x and a selector for x stitch_shape_knit  and x stitch_shape_purl
+        }
+
+        // TODO:  be able to make pattern from image (is javascript reasonable? probs not, can do python async with ajax)
         // Color change - change every pixel that is of that specific color
         // purl display in stitchify - might be easier to generate in python, but editing the stitches is easier if javascript
         // ideally stitchify cables as well
         // notes, and numbers along the side
         // insert column/row
         // draw square of color
-        // ctrl-z functionality - store array of snapshots - push one on after each change
 
 
         function snapAndSave(save=true, snap=true) {
-            console.log("saving corners",$("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)))
+            // console.log("saving corners",$("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)))
             pattern = copyToPattern($("#stitch_box_0_0"), $("#stitch_box_"+(stitches_wide-1)+"_"+(stitches_high-1)));
             pattern.id = {{pattern_id}}
             pattern.colors = Array.from(colors_added);  // save the added colors
             pattern.stitch_box_width = stitch_box_width
             pattern.stitch_box_height = stitch_box_height
-            console.log("pattern to save",pattern)
+            // console.log("pattern to save",pattern)
             if (snap) {
                 snapshots.push(pattern)
                 snapIndex = snapshots.length-1

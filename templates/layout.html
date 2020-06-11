@@ -1,0 +1,26 @@
+<!doctype html>
+<title>My Application</title>
+<style>
+    .flashes {
+        position: absolute;
+        left: 50%;
+        width: 250px;
+        margin-left: -125px;
+        border-radius: 6px;
+        background-color: lightblue;
+        opacity: .9;
+        padding: 20px;
+        min-height: 30px;
+        text-align: center;
+    }
+</style>
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for message in messages %}
+      <li style="margin:auto">{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+{% block body %}{% endblock %}

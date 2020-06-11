@@ -1,5 +1,5 @@
 from database import *
-from flask import Flask, request, redirect, render_template
+from flask import Flask, request, redirect, render_template, flash
 from flask import session as login_session
 import json
 
@@ -34,6 +34,7 @@ def login():
     print(user)
     if user != None and user.password == request.form["password"]:
         login_session['user'] = user.username
+        flash('You were successfully logged in')
         return main_page()
     else:
         return home()
@@ -46,6 +47,7 @@ def signup():
     if user == None:
         user = create_user(request.form['username'],request.form['password'])
         login_session['user'] = user.username
+        flash('Welcome to KnitWit, '+user.username)
         return main_page()
     return home()
 
