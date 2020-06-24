@@ -31,6 +31,9 @@ def get_pattern(id_num):
 def get_users_patterns(user):
     return session.query(Pattern).filter_by(user_id=user.id).all()
 
+def get_pattern_user_name(user, name):
+    return session.query(Pattern).filter_by(user_id=user.id).filter_by(name=name).first()
+
 def update_pattern(id_num, pattern_json):
     pattern = session.query(Pattern).filter_by(id=id_num).first()
     pattern.pattern_json = pattern_json

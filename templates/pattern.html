@@ -373,13 +373,14 @@
             stitches_wide = $("#stitches_wide").val();
             stitches_high = $("#stitches_high").val();
 
+            console.log("filling pattern sub box",stitches_wide,stitch_box_width)
             for (sub_box of [$("#pattern_sub_box"), $("#pattern_sub_box_select")]) {
                 sub_box.css("width",stitches_wide*stitch_box_width);
                 sub_box.css("height",stitches_high*stitch_box_height);
             }
 
             var x, y;
-            console.log("called fill boxes");
+            console.log("called fill boxes!");
             jQuery("#pattern_sub_box").empty();
             jQuery("#pattern_sub_box_select").empty();
             for (y = 0; y < stitches_high; y++){

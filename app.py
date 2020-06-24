@@ -6,7 +6,7 @@ import json
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'you-will-never-guess'
 
-DEFAULT_PATTERN_JSON = json.dumps({'grid': [[{'color': 'rgb(232, 232, 232)', 'x': 0, 'y': 0}]], 'height': 1, 'width': 1})
+DEFAULT_PATTERN_JSON = json.dumps({'grid': [[{'color': 'rgb(232, 232, 232)', 'x': 0, 'y': 0}]], 'height': 1, 'width': 1, 'stitch_box_width': 30, 'stitch_box_height':30})
 
 def check_login(fail_fn = lambda: home):
     def _decorator_check_login(function):
@@ -60,7 +60,11 @@ def main_page():
 @check_login()
 @app.route('/new_pattern', methods=['POST'])
 def new_pattern():
-    pattern = add_pattern(get_user(login_session['user']), request.form['name'], DEFAULT_PATTERN_JSON)
+    name =  request.form['name']
+    if get_pattern_user_name(get_user(login_session['user']), name) != None:
+        flash("Pattern with that name already exists")
+        return main_page()
+    pattern = add_pattern(get_user(login_session['user']), name, DEFAULT_PATTERN_JSON)
     return pattern_page(pattern.id)
 
 @check_login()
