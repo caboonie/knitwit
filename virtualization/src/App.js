@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import logo from './logo.svg';
 import './App.css';
 import Button from 'react-bootstrap/Button'
+import defaultCellRangeRenderer from './defaultCellRangeRenderer.js'
 
 import { Grid, AutoSizer} from "react-virtualized";
 import { act } from 'react-dom/test-utils';
@@ -20,15 +21,22 @@ const actions = {
   DROPPER: 'dropper'
 }
  
-function cornerToBounds(corner1,corner2) {
+function cornerToBounds(corner1,corner2,corner3=null) {
+  // console.log("corners",corner1,corner2,corner3);
   var [x1,y1] = keyToXY(corner1);
   var [x2,y2] = keyToXY(corner2);
-  var leftx = Math.min(x1,x2)
-  var rightx = Math.max(x1,x2)+1
-  var topy = Math.min(y1,y2)
-  var bottomy = Math.max(y1,y2)+1
+  var [x3,y3] = [x1,y1];
+  if(corner3!=null) {
+    [x3,y3] = keyToXY(corner3);
+  }
+  var leftx = Math.min(x1,x2,x3)
+  var rightx = Math.max(x1,x2,x3)+1
+  var topy = Math.min(y1,y2,y3)
+  var bottomy = Math.max(y1,y2,y3)+1
   return [leftx,topy,rightx,bottomy]
 }
+
+
 
 function renderColorBox(color, selected, onClick) {
   var classes = "color-box"
@@ -71,6 +79,9 @@ class App extends Component {
         selectedBox: null,
         selection:  make2DArray(initWidth, initHeight, false),
         corner2: null,
+        staticCellCache: {},
+        changedCells: new Set(),
+        shape: "purl",
         pattern: {
             colorGrid: make2DArray(initWidth, initHeight, "lightgray"),
             shapeGrid: make2DArray(initWidth, initHeight, "purl"),
@@ -82,19 +93,27 @@ class App extends Component {
         },
         clipboard: null,
         snapshots: [],
+        snapshotIndex: null,
     }
 
     this.changeColor = this.changeColor.bind(this);
     this.changeWidth = this.changeWidth.bind(this);
     this.changeHeight = this.changeHeight.bind(this);
     this.copy = this.copy.bind(this);
+    this.clickStitchify = this.clickStitchify.bind(this);
     this.clickCopy = this.clickCopy.bind(this);
     this.clickPaste = this.clickPaste.bind(this);
     this.clickSelect = this.clickSelect.bind(this);
     this.clickBucket = this.clickBucket.bind(this);
+    this.clickSquare = this.clickSquare.bind(this);
     this.addColor = this.addColor.bind(this);
+    this.keydownHandler = this.keydownHandler.bind(this);
+    this.takeSnapshot = this.takeSnapshot.bind(this);
+    this.applySnapshot = this.applySnapshot.bind(this);
+    this.copyPattern = this.copyPattern.bind(this);
     this.classyButton = this.classyButton.bind(this);
     this.cellRenderer = this.cellRenderer.bind(this);
+    this.cellRangeRenderer = this.cellRangeRenderer.bind(this);
 
 }
 
@@ -120,7 +139,7 @@ changeWidth(event) {
     pattern.colorGrid = make2DArray(pattern.width, pattern.height, "lightgray");
     pattern.shapeGrid = make2DArray(pattern.width, pattern.height, "purl");
     var pasted_pattern = this.paste(copied, pattern, "0-0", true)
-    this.setState({pattern: pasted_pattern, action: actions.PENCIL, selection: make2DArray(pattern.width, pattern.height, false)});
+    this.setState({pattern: pasted_pattern, selection: make2DArray(pattern.width, pattern.height, false)});
 }
 
 changeHeight(event) {
@@ -132,16 +151,18 @@ changeHeight(event) {
     pattern.shapeGrid = make2DArray(pattern.width, pattern.height, "purl");
     // this.setState({pattern: pattern});
     var pasted_pattern = this.paste(copied, pattern, "0-0", true)
-    this.setState({pattern: pasted_pattern, action: actions.PENCIL, selection: make2DArray(pattern.width, pattern.height, false)});
+    this.setState({pattern: pasted_pattern, selection: make2DArray(pattern.width, pattern.height, false)});
 }
 
 copy(corner1 = null, corner2 = null) {
     
     if (corner1 === null) {
         // by default copy the whole pattern
+        // this is not a DEEP COPY
         var copied = {...this.state.pattern}
         return copied
     } 
+    // this is deep
     var pattern = {}
     const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1, corner2);
     var colorArray = []
@@ -170,13 +191,16 @@ paste(pattern, destination, corner = "0-0", noResize = false) {
 
     if((bottomy > destination.height || rightx > destination.width) && !noResize) {
       var copied = this.copy();
+      console.log("resizing for pasting",copied)
       destination.width = Math.max(destination.width, rightx);
       destination.height = Math.max(destination.height, bottomy);
       destination.colorGrid = make2DArray(destination.width, destination.height, "lightgray");
       destination.shapeGrid = make2DArray(destination.width, destination.height, "purl");
       destination = this.paste(copied, destination);
-      this.setState({selection: make2DArray(destination.width, destination.height, false)});
     }
+
+    var bottomy = Math.min(destination.height, topy+pattern.height)
+    var rightx = Math.min(destination.width, leftx+pattern.width)
     
     for (var y = topy; y < bottomy; y++){
         for (var x = leftx; x < rightx; x++) {
@@ -200,35 +224,47 @@ clickColor(color) {
     var selectedColor = null
     if (this.state.selectedColor !== color) {
         selectedColor = color;
+        if (this.state.action === actions.ARROW) {
+          this.setState({action: actions.PENCIL})
+        }
+        this.setState({selectedColor: selectedColor})
     }
-
-    this.setState({selectedColor: selectedColor})
 }
 
-boxOnMouseDown(x,y, key) {
-
+boxOnMouseDown(event,x,y, key) {
+    event.preventDefault()
     var selectedBox = null
     if (this.state.selectedBox !== key) {
+      this.state.staticCellCache[this.state.selectedBox] = null;
       selectedBox = key;
     }
 
+    const pattern = {...this.state.pattern};
     switch(this.state.action) {
         case actions.PENCIL:
-          const pattern = {...this.state.pattern};
+          if(this.state.pattern.colorGrid[y][x] === this.state.selectedColor || this.state.selectedColor === null){
+            break;
+          }
+          
           pattern.colorGrid[y][x] = this.state.selectedColor || pattern.colorGrid[y][x]; 
+          this.state.staticCellCache[key] = null;
           this.setState({
             pattern: pattern,
           })
           break;
         case actions.SELECTION:
-          var selection = make2DArray(this.state.pattern.width, this.state.pattern.height, false);
-          selection[y][x] = true;
           this.setState({
-            selection: selection,
+            corner2: key,
           })
           break;
         case actions.BUCKET:
           this.paintBucket(key)
+          break;
+        case actions.SQUARE:
+          this.setState({
+            corner2: key,
+          })
+          break;
         default:
 
     }
@@ -238,15 +274,18 @@ boxOnMouseDown(x,y, key) {
     })
 }    
 
-boxOnMouseOver(x, y, key) {
+boxOnMouseOver(event,x, y, key) {
+  event.preventDefault()
+  this.state.staticCellCache[key] = null;
   if (!this.state.dragging) {
     return
   }
   
+  const pattern = {...this.state.pattern};
   switch(this.state.action) {
     case actions.PENCIL:
-      const pattern = {...this.state.pattern};
-      if(pattern.colorGrid[y][x] === null || pattern.colorGrid[y][x] === this.state.selectedColor){
+      
+      if(pattern.colorGrid[y][x] === this.state.selectedColor || this.state.selectedColor === null){
         return
       }
       pattern.colorGrid[y][x] = this.state.selectedColor; 
@@ -255,48 +294,97 @@ boxOnMouseOver(x, y, key) {
       })
       break;
     case actions.SELECTION:
-      var selection = make2DArray(this.state.pattern.width, this.state.pattern.height, false);
-      const [leftx, topy, rightx, bottomy] = cornerToBounds(this.state.selectedBox, key);
-      for (var _y = topy; _y < bottomy; _y++){
-        for (var _x = leftx; _x < rightx; _x++) {
-            selection[_y][_x] = true;
-        }
+      if(key !== this.state.corner2){
+        this.setState({
+          corner2: key,
+        })
       }
-      this.setState({
-        selection: selection,
-        corner2: key,
-      })
+      
+      break;
+    case actions.SQUARE:
+      // TODO - implement snapshots and then come back here
+      // todo - have whole rows that don't need to be re-rendered
+      if(key !== this.state.corner2){
+        this.setState({
+          corner2: key,
+        })
+      }
+      break;
     default:  
-  }
-  
+  } 
 }
 
-boxOnMouseUp(x, y, key) {
-  
+boxOnMouseUp(event,x, y, key) {
+  event.preventDefault()
+  switch(this.state.action) {
+    case actions.SQUARE:
+      var pattern = {...this.state.pattern};
+      const [leftx,topy,rightx,bottomy] = cornerToBounds(this.state.selectedBox, key);
+      for (var y = topy; y < bottomy; y++) {
+          for (var x = leftx; x < rightx; x++) {
+              pattern.colorGrid[y][x] = this.state.selectedColor;
+              this.state.staticCellCache[y+'-'+x] = null;
+          }
+      }
+      this.setState({
+        pattern: pattern,
+        corner2: null,
+        selectedBox: null,
+      })
+      break;
+    default:
+      
+  }
+
   this.setState({
     dragging: false,
   })
 }
 
+universalMouseUp(event) {
+  this.setState({
+    dragging: false,
+  })
+}
+
+copyPattern(pattern){
+  const newPattern = {...pattern}
+  const newColorGrid = []
+  const newShapeGrid = []
+  for(var i=0;i<pattern.height;i++) {
+    newColorGrid.push({...pattern.colorGrid[i]})
+    newShapeGrid.push({...pattern.shapeGrid[i]})
+  }
+  newPattern.colorGrid = newColorGrid
+  newPattern.shapeGrid = newShapeGrid
+  return newPattern
+}
+
 clickCopy() {
+  console.log("calling clickCopy")
   if(this.state.action === actions.SELECTION){
     const pattern = this.copy(this.state.selectedBox, this.state.corner2)
-    this.setState({action:actions.ARROW, clipboard: pattern})
+    this.setState({action:actions.ARROW, clipboard: pattern, selectedColor: null})
+    this.state.staticCellCache = {}
   }
 }
 
 clickPaste() {
+  console.log("calling clicPasrw")
   if(this.state.clipboard !== null){
+    console.log("here")
     const pattern = this.paste(this.state.clipboard, {...this.state.pattern}, this.state.selectedBox)
-    this.setState({action:actions.ARROW, pattern:pattern})
+    this.setState({action:actions.ARROW, pattern:pattern, selectedColor: null})
+    this.state.staticCellCache = {}
   }
 }
 
 clickSelect() {
+  this.state.staticCellCache = {}
   if (this.state.action === actions.SELECTION) {
     this.setState({action: actions.PENCIL})
   } else {
-    this.setState({action: actions.SELECTION})
+    this.setState({action: actions.SELECTION, selectedBox:null, corner2:null})
   }
 }
 
@@ -308,18 +396,110 @@ clickBucket() {
   }
 }
 
-setBoxes(func, corner1, corner2) {
-    const pattern = {...this.state.pattern};
-    const [leftx,topy,rightx,bottomy] = cornerToBounds(corner1, corner2);
-    for (var y = topy; y < bottomy; y++) {
-        for (var x = leftx; x < rightx; x++) {
+clickSquare() {
+  if (this.state.action === actions.SQUARE) {
+    this.setState({action: actions.PENCIL})
+  } else {
+    this.setState({ action: actions.SQUARE, selectedBox:null, corner2:null})
+    
+  }
+}
+
+clickStitchify() {
+  this.state.staticCellCache = {}
+  if (this.state.shape === "knit") {
+    this.setState({shape: "purl"})
+  } else {
+    this.setState({shape: "knit"})
+    
+  }
+}
+
+keydownHandler(e){
+  console.log("keyCode",e.keyCode, e.ctrlKey)
+  if (e.ctrlKey) {
+    switch (e.keyCode){
+      case 90:
+        console.log("Trying undo",this.state.snapshotIndex)
+        break;
+      case 89:
+        break;
+      case 83:
+        e.preventDefault()
+        alert("saved")        
+        break;
+      case 67:
+        this.clickCopy()
+        break;
+      case 86:
+        this.clickPaste()
+        break;
+      case 69:
+        e.preventDefault()
+        this.clickSelect()
+        break;
+      case 81:
+        this.clickSquare()
+        break;
+      case 66:
+        e.preventDefault()
+        this.clickBucket()
+        break;
+    }
+  }
+  this.setState({shape:this.state.shape})
+}
+componentDidMount(){
+  document.addEventListener('keydown',this.keydownHandler);
+}
+componentWillUnmount(){
+  document.removeEventListener('keydown',this.keydownHandler);
+}
+
+// todo pixelize function
+// todo stitchify
+// potentially too slow DX
+// copying IS taking too long...
+// what if snapshot just stored differences in state... look at the staticCellCache (or have a changedCellSet)
+// for each of those we store the current cell state
+// for saving we will still want all of the relevant field
+// wait - would this require backtracking through every second of mouse movement???
+// at least through every entry of the mouse onto a new cell. Also how do we know how far back to go?
+// ok how about we don't try using snapshots/reseting for squares?
+// instead, we can use an overlay.
+takeSnapshot() {
+  // this.setState({snapshots: this.state.snapshots.concat({pattern:this.copyPattern(this.state.pattern), colors:{...this.state.colors}})});
+  console.log("taking snapshot",this.state.changedCells)
+  const priorCells = {}
+  for(var key in this.state.changedCells) {
+    var [x,y] = keyToXY(key);
+    priorCells[key] = this.state.pattern.colorGrid[y][x];
+  }
+  // TODO remove the future snapshots - slice
+  console.log("adding snapshot",priorCells)
+  this.setState({snapshots: this.state.snapshots.concat({priorCells}), snapshotIndex:this.state.snapshotIndex+1||0});
+  this.state.changedCells = new Set();
+}
+
+applySnapshot() {
+  const priorCells = this.state.snapshots[this.state.snapshotIndex-2]
+  console.log("snapIndex and priorCells",this.state.snapshotIndex-2,priorCells)
+  for(var key of priorCells){
+    var [x,y] = keyToXY(key);
+    this.state.pattern.colorGrid[y][x] = priorCells[key];
+  }
+  this.setState({pattern:this.state.pattern, snapshotIndex:this.state.snapshotIndex-1})
+}
+
+setBoxes(pattern, func, corner1, corner2) {
+    const [_leftx,_topy,_rightx,_bottomy] = cornerToBounds(corner1, corner2);
+    for (var y = _topy; y < _bottomy; y++) {
+        for (var x = _leftx; x < _rightx; x++) {
             func(pattern, x, y)
         }
     }
 
-    this.setState({
-        pattern: pattern,
-    })
+    return pattern
   }
 
   colorAtKey(key) {
@@ -329,63 +509,104 @@ setBoxes(func, corner1, corner2) {
 
   paintBucket(start_box) {
     // recursive BFS 
-    var pattern = {...this.state.pattern}
+    var pattern = this.state.pattern
     let visited = new Set();
     var color = this.colorAtKey(start_box)
     var selectedColor = this.state.selectedColor;
+    var agenda = [start_box]
 
-    function paintBucketRecurse(box_id) {
-        if (visited.has(box_id)) {
-            return
-        }
+    while(agenda.length !== 0) {
+      // console.log("agenda",agenda)
+      const box_id = agenda.shift();
+      visited.add(box_id);
 
-        visited.add(box_id);
-
-        const [x, y] = keyToXY(box_id)
-        if (pattern.colorGrid[y][x] === color) {
-            pattern.colorGrid[y][x] = selectedColor
-            // recurse on neighbors
-            for (var [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-                if (0<=(x+dx) && (x+dx)<pattern.width){
-                    if (0<=(y+dy) && (y+dy)<pattern.height){
-                        paintBucketRecurse((y+dy)+"-"+(x+dx))
-                    }
-                }
+      const [x, y] = keyToXY(box_id)
+      if (pattern.colorGrid[y][x] === color) {
+          pattern.colorGrid[y][x] = selectedColor
+          this.state.staticCellCache[box_id] = null;
+          // recurse on neighbors
+          let child_id;
+          for (var [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            child_id = (y+dy)+'-'+(x+dx)
+            if (!visited.has(child_id)){
+              if (0<=(x+dx) && (x+dx)<pattern.width){
+                  if (0<=(y+dy) && (y+dy)<pattern.height){
+                      agenda.push(child_id);
+                  }
+              }
             }
-        }
+          }
+      }
     }
-    paintBucketRecurse(start_box)
+
     this.setState({pattern:pattern})
 }
 
-  // TODO optimization idea - have a set of cell that have changed and only re-render them if necessary
-  // Better numbers - draggable, click and number shows
-  // row tracker
-  // measuring tool
+// todo - optimize to only update the overlay on changes
+// todo - make the gridlines show up please
+cellRangeRenderer(props) {
+  const [children, cellCache] = defaultCellRangeRenderer(props, this.state.staticCellCache);
+  this.setState({staticCellCache:cellCache})
+ 
+  if((this.state.action === actions.SELECTION || this.state.action === actions.SQUARE) && this.state.selectedBox){
+
+    var backgroundColor = "blue"
+    var opacity = ".5"
+    if(this.state.action === actions.SQUARE){
+      backgroundColor = this.state.selectedColor
+      opacity = ".8"
+    }
+    const [leftx, topy, rightx, bottomy] = cornerToBounds(this.state.selectedBox,this.state.corner2)
+    var height = this.state.pattern.stitchHeight*(bottomy-topy);
+    var width = this.state.pattern.stitchWidth*(rightx-leftx);
+    children.unshift(<div key="hhh" style={{position:"absolute", zIndex:"1", opacity:opacity, 
+                          backgroundColor:backgroundColor, height:height, width:width,
+                          left:leftx*this.state.pattern.stitchWidth,
+                          top:topy*this.state.pattern.stitchHeight,
+                          pointerEvents:"none"}}></div>); 
+  }
   
+  return children;
+}
+
+  // TODO 
+  // Better numbers - draggable, click and number shows
+  // row tracker - should count the number of consecutive stitches - not too bad
+  // save patterns - PYTHON flask XD
+  // measuring tool - or a draggable ruler would be nice
+  // hotkeys
+  
+
 
   
   cellRenderer({columnIndex, key, rowIndex, style}) {
-    var className="stitch-box" 
-    if (this.state.selectedBox === key) {
-      className += " selected-box"
+    var shape = this.state.shape
+    if (this.state.stitchify){
+      shape = "knit"
     }
-    var overlayColor = 'rgba(0,0,0,0)';
-    if (this.state.action === actions.SELECTION && !this.state.selection[rowIndex][columnIndex]) {
-      overlayColor = 'rgba(0,0,0,0.3)'
+    var className="stitch-shape-"+shape+"-inner"
+    // todo enable multi class and option to remove borders
+    if (this.state.selectedBox === key) {
+      className += "-selected"
     }
 
     return (
-      <div key={key} style={style} className={className} 
-           onMouseDown = {() => this.boxOnMouseDown(columnIndex, rowIndex, key)}
-           onMouseOver = {() => this.boxOnMouseOver(columnIndex, rowIndex, key)}
-           onMouseUp = {() => this.boxOnMouseUp(columnIndex, rowIndex, key)}
-      >
+      <div className="untouchable" key={key} style={style}  draggable={false}>
         
-        <div style={{backgroundColor: this.state.pattern.colorGrid[rowIndex][columnIndex]}}>
-          <div name = "overlay" style={{backgroundColor:overlayColor}}>
+        <div className={"stitch-shape-"+shape} style={{backgroundColor: (this.state.selectedBox === key) ? "gray": "darkgray"}}
+          onMouseDown = {(event) => this.boxOnMouseDown(event,columnIndex, rowIndex, key)}
+          onMouseOver = {(event) => this.boxOnMouseOver(event,columnIndex, rowIndex, key)}
+          onMouseUp = {(event) => this.boxOnMouseUp(event,columnIndex, rowIndex, key)}
+          onDragStart= {(event) => event.preventDefault}
+          onDragEnd = {(event) => event.preventDefault}
+          onDragOver = {(event) => event.preventDefault}
+        >
+
+          <div className={className} style={{backgroundColor: this.state.pattern.colorGrid[rowIndex][columnIndex]}}>
 
           </div>
+
+
         </div>
   
       </div>
@@ -395,23 +616,26 @@ setBoxes(func, corner1, corner2) {
   
   
   render() {
+    // onKeyPress={(event) => this.handleKeyPress(event)}
     var colorBoxes = [];
     for (var color of this.state.colors) {
         colorBoxes.push(renderColorBox(color, this.state.selectedColor===color, (color) => this.clickColor(color)));
     }
     var colorValue = this.state.selectedColor === null ? "#ffffff" : this.state.selectedColor
     return (
-      <div className="main-window">
+      <div className="main-window" onMouseUp = {(event) => this.universalMouseUp(event)} >
         <div className="control-panel">
           <span>Width:</span>
           <input type="number" value={this.state.pattern.width} onChange={this.changeWidth}/>
           <span>Height:</span>
           <input type="number" value={this.state.pattern.height} onChange={this.changeHeight}/>
           
-          {this.classyButton(this.clickSelect, "select", actions.SELECTION)}
-          {this.classyButton(this.clickCopy,"copy")}
-          {this.classyButton(this.clickPaste,"paste")}
-          {this.classyButton(this.clickBucket, "bucket", actions.BUCKET)}
+          {this.classyButton(this.clickSelect, "select (ctrl+e)", actions.SELECTION)}
+          {this.classyButton(this.clickCopy,"copy (ctrl+c)")}
+          {this.classyButton(this.clickPaste,"paste (ctrl+v)")}
+          {this.classyButton(this.clickBucket, "bucket (ctrl+b)", actions.BUCKET)}
+          {this.classyButton(this.clickSquare, "square (ctrl+q)", actions.SQUARE)}
+          {this.classyButton(this.clickStitchify, "stitchify")}
         </div>
         <div className = "workspace">
             <div className="tool-box">
@@ -420,12 +644,14 @@ setBoxes(func, corner1, corner2) {
                 <div className="classy-button" onClick={this.addColor}>
                     Select
                 </div>
+                <br></br>
                 {colorBoxes}
             </div>
             <div className="pattern-box">
             <AutoSizer>
               {({ width, height }) => (
                 <Grid
+                  cellRangeRenderer={this.cellRangeRenderer}
                   cellRenderer={this.cellRenderer}
                   columnCount={this.state.pattern.width}
                   columnWidth={this.state.pattern.stitchWidth}
@@ -435,8 +661,10 @@ setBoxes(func, corner1, corner2) {
                   width={width}
                   pattern={this.state.pattern}
                   action={this.state.action}
-                  selection = {this.state.selection}
                   selectedBox = {this.state.selectedBox}
+                  staticCellCache = {this.state.staticCellCache}
+                  corner2 = {this.state.corner2}
+                  shape = {this.state.shape}
                 />
               )}
               </AutoSizer>
@@ -449,5 +677,13 @@ setBoxes(func, corner1, corner2) {
   }
 }
 
+// var globalCellCache = {}
+
+// function cellRangeRenderer(props) {
+//   const [children, cellCache] = defaultCellRangeRenderer(props);
+//   // this.setState({cellCache:cellCache})
+//   children.push(<div key="hhh">My custom overlay</div>); // could use this for select box - much simpler no need to rerender children, jsut overlay
+//   return children;
+// }
 
 export default App;
