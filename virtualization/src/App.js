@@ -38,7 +38,7 @@ function cornerToBounds(corner1,corner2,corner3=null) {
 
 
 
-function renderColorBox(color, selected, onClick) {
+function renderColorBox(index, color, selected, onClick) {
   var classes = "color-box"
   if (selected) {
       classes += " selected-box"
@@ -48,7 +48,7 @@ function renderColorBox(color, selected, onClick) {
           style = {{backgroundColor: color}}
           key = {color}
           onClick={() => onClick(color)}
-      >
+      >{index+1}
       </div>
   )
 }
@@ -101,6 +101,7 @@ class App extends Component {
     this.changeHeight = this.changeHeight.bind(this);
     this.copy = this.copy.bind(this);
     this.clickStitchify = this.clickStitchify.bind(this);
+    this.clickPencil = this.clickPencil.bind(this);
     this.clickCopy = this.clickCopy.bind(this);
     this.clickPaste = this.clickPaste.bind(this);
     this.clickSelect = this.clickSelect.bind(this);
@@ -405,6 +406,10 @@ clickSquare() {
   }
 }
 
+clickPencil() {
+  this.setState({action: actions.PENCIL})
+}
+
 clickStitchify() {
   this.state.staticCellCache = {}
   if (this.state.shape === "knit") {
@@ -417,7 +422,15 @@ clickStitchify() {
 
 keydownHandler(e){
   console.log("keyCode",e.keyCode, e.ctrlKey)
-  if (e.ctrlKey) {
+  // color hotkeys
+  if(e.keyCode>=49 && e.keyCode<=57){
+    var index = e.keyCode-49;
+    if(this.state.colors.length>index){
+      this.setState({selectedColor:this.state.colors[index]})
+    }
+  }
+  // tool hotkeys
+  if (e.ctrlKey) {  
     switch (e.keyCode){
       case 90:
         console.log("Trying undo",this.state.snapshotIndex)
@@ -444,6 +457,10 @@ keydownHandler(e){
       case 66:
         e.preventDefault()
         this.clickBucket()
+        break;
+      case 80:
+        e.preventDefault()
+        this.clickPencil()
         break;
     }
   }
@@ -618,8 +635,8 @@ cellRangeRenderer(props) {
   render() {
     // onKeyPress={(event) => this.handleKeyPress(event)}
     var colorBoxes = [];
-    for (var color of this.state.colors) {
-        colorBoxes.push(renderColorBox(color, this.state.selectedColor===color, (color) => this.clickColor(color)));
+    for (const [index, color] of this.state.colors.entries()) {
+        colorBoxes.push(renderColorBox(index, color, this.state.selectedColor===color, (color) => this.clickColor(color)));
     }
     var colorValue = this.state.selectedColor === null ? "#ffffff" : this.state.selectedColor
     return (
@@ -633,6 +650,7 @@ cellRangeRenderer(props) {
           {this.classyButton(this.clickSelect, "select (ctrl+e)", actions.SELECTION)}
           {this.classyButton(this.clickCopy,"copy (ctrl+c)")}
           {this.classyButton(this.clickPaste,"paste (ctrl+v)")}
+          {this.classyButton(this.clickPencil, "pencil (ctrl+p)", actions.PENCIL)}
           {this.classyButton(this.clickBucket, "bucket (ctrl+b)", actions.BUCKET)}
           {this.classyButton(this.clickSquare, "square (ctrl+q)", actions.SQUARE)}
           {this.classyButton(this.clickStitchify, "stitchify")}
